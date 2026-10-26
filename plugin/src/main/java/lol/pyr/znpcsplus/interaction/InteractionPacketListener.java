@@ -7,6 +7,7 @@ import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.Equipment;
 import com.github.retrooper.packetevents.protocol.player.EquipmentSlot;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
 import lol.pyr.znpcsplus.api.event.NpcInteractEvent;
@@ -39,26 +40,38 @@ public class InteractionPacketListener implements PacketListener {
 
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
-        if (event.getPacketType() != PacketType.Play.Client.INTERACT_ENTITY) return;
+        if (event.getPacketType() != PacketType.Play.Client.INTERACT_ENTITY
+                && event.getPacketType() != PacketType.Play.Client.ATTACK) {
+            return;
+        }
         Player player = (Player) event.getPlayer();
         if (player == null) return;
 
-        WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
+        int entityId;
+        WrapperPlayClientInteractEntity.InteractAction packetAction;
+        if (event.getPacketType() == PacketType.Play.Client.ATTACK) {
+            entityId = new WrapperPlayClientAttack(event).getEntityId();
+            packetAction = WrapperPlayClientInteractEntity.InteractAction.ATTACK;
+        } else {
+            WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
+            entityId = packet.getEntityId();
+            packetAction = packet.getAction();
+        }
 
-        NpcEntryImpl entry = npcRegistry.getByEntityId(packet.getEntityId());
+        NpcEntryImpl entry = npcRegistry.getByEntityId(entityId);
         if (entry == null || !entry.isProcessed()) return;
         NpcImpl npc = entry.getNpc();
 
-        if ((packet.getAction().equals(WrapperPlayClientInteractEntity.InteractAction.INTERACT)
-                || packet.getAction().equals(WrapperPlayClientInteractEntity.InteractAction.INTERACT_AT))
+        if ((packetAction.equals(WrapperPlayClientInteractEntity.InteractAction.INTERACT)
+                || packetAction.equals(WrapperPlayClientInteractEntity.InteractAction.INTERACT_AT))
                 && npc.getType().equals(typeRegistry.getByName("allay"))) {
             PacketEvents.getAPI().getPlayerManager().sendPacket(player,
-                    new WrapperPlayServerEntityEquipment(packet.getEntityId(), Collections.singletonList(
+                    new WrapperPlayServerEntityEquipment(entityId, Collections.singletonList(
                             new Equipment(EquipmentSlot.MAIN_HAND, ItemStack.EMPTY))));
             player.updateInventory();
         }
 
-        InteractionType type = wrapClickType(packet.getAction());
+        InteractionType type = wrapClickType(packetAction);
 
         User user = userManager.get(player);
         if (!user.canInteract()) return;
