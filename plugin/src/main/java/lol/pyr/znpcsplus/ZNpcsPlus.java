@@ -2,9 +2,10 @@ package lol.pyr.znpcsplus;
 
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.PacketEventsAPI;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.manager.server.ServerVersion;
-import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
+import com.github.retrooper.packetevents.util.PEVersion;
 import lol.pyr.director.adventure.command.CommandContext;
 import lol.pyr.director.adventure.command.CommandManager;
 import lol.pyr.director.adventure.command.MultiCommand;
@@ -83,12 +84,10 @@ public class ZNpcsPlus {
     private final MojangSkinCache skinCache;
     private final EntityPropertyRegistryImpl propertyRegistry;
 
+    @SuppressWarnings("unchecked")
     public ZNpcsPlus(ZNpcsPlusBootstrap bootstrap) {
         this.bootstrap = bootstrap;
-        packetEvents = SpigotPacketEventsBuilder.build(bootstrap);
-        PacketEvents.setAPI(packetEvents);
-        packetEvents.getSettings().checkForUpdates(false);
-        packetEvents.load();
+        packetEvents = (PacketEventsAPI<Plugin>) PacketEvents.getAPI();
 
         configManager = new ConfigManager(getDataFolder());
         skinCache = new MojangSkinCache(configManager, new File(getDataFolder(), "skins"));
@@ -103,6 +102,11 @@ public class ZNpcsPlus {
     }
 
     public void onEnable() {
+        if (packetEvents.getVersion().isOlderThan(new PEVersion(2, 14, 0))) {
+            bootstrap.getLogger().severe("ZNPCsPlus requires the PacketEvents plugin version 2.14.0 or newer.");
+            Bukkit.getPluginManager().disablePlugin(bootstrap);
+            return;
+        }
         getDataFolder().mkdirs();
 
         log(ChatColor.YELLOW + "  ___       __   __  __");
@@ -114,8 +118,6 @@ public class ZNpcsPlus {
         long before = System.currentTimeMillis();
 
         log(ChatColor.WHITE + " * Initializing libraries...");
-
-        packetEvents.init();
 
         BukkitAudiences adventure = BukkitAudiences.create(bootstrap);
         shutdownTasks.add(adventure::close);
@@ -153,8 +155,10 @@ public class ZNpcsPlus {
 
         typeRegistry.registerDefault(packetEvents, propertyRegistry);
         actionRegistry.registerTypes(scheduler, adventure, textSerializer, bungeeConnector);
-        packetEvents.getEventManager().registerListener(new InteractionPacketListener(userManager, npcRegistry, typeRegistry, scheduler), PacketListenerPriority.MONITOR);
-        packetEvents.getEventManager().registerListener(new ClientPacketListener(configManager), PacketListenerPriority.LOWEST);
+        PacketListenerCommon interactionListener = packetEvents.getEventManager().registerListener(new InteractionPacketListener(userManager, npcRegistry, typeRegistry, scheduler), PacketListenerPriority.MONITOR);
+        shutdownTasks.add(() -> packetEvents.getEventManager().unregisterListener(interactionListener));
+        PacketListenerCommon clientListener = packetEvents.getEventManager().registerListener(new ClientPacketListener(configManager), PacketListenerPriority.LOWEST);
+        shutdownTasks.add(() -> packetEvents.getEventManager().unregisterListener(clientListener));
         new Metrics(bootstrap, 18244);
         pluginManager.registerEvents(new UserListener(userManager), bootstrap);
 
@@ -223,7 +227,6 @@ public class ZNpcsPlus {
             throwable.printStackTrace();
         }
         shutdownTasks.clear();
-        PacketEvents.getAPI().terminate();
     }
 
     private PacketFactory setupPacketFactory(TaskScheduler scheduler, EntityPropertyRegistryImpl propertyRegistry, ConfigManager configManager) {
