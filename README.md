@@ -20,6 +20,11 @@ Looking for up-to-date builds of the plugin? Check out our [Jenkins](https://ci.
 Requirements:
 - Java 8+
 - Minecraft 1.8 - 26.2
+- PacketEvents 2.14.0 or newer, installed as a separate server plugin. This fork uses the shared PacketEvents API and does not bundle or manage its lifecycle.
+
+This fork was smoke-tested on Paper 26.3 build 223 with PacketEvents 2.14.0 and Java 25: player, armor stand, zombie, sheep, villager and sulfur cube NPCs, hologram text, properties, YAML save/reload, both click types, and listener cleanup when disabling ZNPCsPlus. The modern attack packet is handled separately from right-click interactions. Other entity types, older Minecraft versions and integrations were not covered by this smoke test.
+
+Compatible PacketEvents updates can be installed independently without rebuilding ZNPCsPlus. Changes to PacketEvents APIs or Minecraft entity metadata may still require ZNPCsPlus updates.
 
 Supported Softwares:
 - Spigot ([Website](https://www.spigotmc.org/))
